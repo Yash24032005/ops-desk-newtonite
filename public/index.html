@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ops Desk</title>
+
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --ink: #1b2430;
+      --mut: #667085;
+      --line: #e2e6ec;
+      --acc: #1f5eff;
+      --bad: #c62828;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12161c;
+        --card: #1a2029;
+        --ink: #e8ecf2;
+        --mut: #8f9bad;
+        --line: #2a3340;
+        --acc: #6c9bff;
+        --bad: #ff7a7a;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font: 14px/1.45 system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    /* Layout Components */
+    header {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+
+    header h1 {
+      font-size: 16px;
+      margin: 0;
+      flex: 1;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.2fr);
+      gap: 12px;
+      padding: 12px;
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    @media (max-width: 800px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    /* Form Elements & Buttons */
+    button,
+    select,
+    input,
+    textarea {
+      font: inherit;
+      color: var(--ink);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 5px 9px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button.p {
+      background: var(--acc);
+      color: #fff;
+      border-color: var(--acc);
+    }
+
+    button.on {
+      border-color: var(--acc);
+      color: var(--acc);
+    }
+
+    /* List & Detail Elements */
+    .item {
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+
+    .item:hover,
+    .item.sel {
+      background: var(--bg);
+    }
+
+    .mut {
+      color: var(--mut);
+      font-size: 12px;
+    }
+
+    .tag {
+      font-size: 12px;
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-right: 4px;
+    }
+
+    .URGENT {
+      color: var(--bad);
+      border-color: var(--bad);
+    }
+
+    #banner {
+      display: none;
+      background: var(--bad);
+      color: #fff;
+      padding: 8px 16px;
+    }
+
+    .ev {
+      border-left: 2px solid var(--line);
+      padding: 2px 0 6px 10px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Alert Banner -->
+  <div id="banner"></div>
+
+  <!-- Global Header -->
+  <header>
+    <h1>Ops Desk</h1>
+    <span id="notif" class="mut"></span>
+    <span id="who" class="mut"></span>
+    <button id="out" style="display: none;">Log out</button>
+  </header>
+
+  <!-- Login Card -->
+  <div id="login" class="card" style="display: none; max-width: 340px; margin: 60px auto;">
+    <h3 style="margin-top: 0;">Sign in</h3>
+    <div class="row">
+      <select id="lemail" style="flex: 1;"></select>
+    </div>
+    <div class="row">
+      <input id="lpw" type="password" placeholder="Password" value="demo123" style="flex: 1;">
+      <button id="lgo" class="p">Sign in</button>
+    </div>
+    <div class="mut">Demo password for all users: demo123</div>
+  </div>
+
+  <!-- Main App Workspace -->
+  <main id="app" style="display: none;">
+    <!-- Items Panel -->
+    <section class="card">
+      <div class="row" id="views"></div>
+
+      <div class="row">
+        <input id="q" placeholder="Search title" style="flex: 1;">
+        <select id="status">
+          <option value="">Any status</option>
+          <option>OPEN</option>
+          <option>IN_PROGRESS</option>
+          <option>AWAITING_APPROVAL</option>
+          <option>RESOLVED</option>
+          <option>CLOSED</option>
+        </select>
+        <select id="priority">
+          <option value="">Any priority</option>
+          <option>URGENT</option>
+          <option>HIGH</option>
+          <option>MEDIUM</option>
+          <option>LOW</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input id="ntitle" placeholder="New item title" style="flex: 1;">
+        <select id="nteam"></select>
+        <button id="create" class="p">Create</button>
+      </div>
+
+      <div id="list"></div>
+      <button id="more" style="display: none; width: 100%;">Load more</button>
+    </section>
+
+    <!-- Detail View Panel -->
+    <section class="card" id="detail">
+      <span class="mut">Select an item</span>
+    </section>
+  </main>
+
+  <script>
+    // --- State & Constants ---
+    const $ = (s) => document.querySelector(s);
+    const esc = (s) =>
+      String(s ?? '').replace(/[&<>"]/g, (c) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+      }[c]));
+
+    const S = {
+      tok: localStorage.tok || '',
+      view: '',
+      cursor: null,
+      sel: null,
+      me: null,
+      users: {},
+      t: null,
+    };
+
+    const VIEWS = [
+      ['', 'All my teams'],
+      ['mine', 'Assigned to me'],
+      ['unassigned_urgent', 'Unassigned urgent'],
+      ['approval', 'Awaiting my approval'],
+    ];
+
+    // --- API Client ---
+    async function api(path, method = 'GET', body) {
+      const headers = {
+        'content-type': 'application/json',
+        Authorization: 'Bearer ' + S.tok,
+        ...(method === 'POST' ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
+      };
+
+      const res = await fetch('/api' + path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await res.json();
+
+      if (res.status === 401 && S.tok) {
+        logout();
+      }
+
+      if (!res.ok) {
+        const err = new Error(data.error);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+
+      return data;
+    }
+
+    // --- Notifications & Feedback ---
+    function banner(msg) {
+      const b = $('#banner');
+      b.textContent = msg;
+      b.style.display = 'block';
+      setTimeout(() => {
+        b.style.display = 'none';
+      }, 6000);
+    }
+
+    async function act(fn) {
+      try {
+        await fn();
+      } catch (e) {
+        banner(e.status === 409 ? 'Conflict: ' + e.message : e.message);
+        if (S.sel) open(S.sel);
+        load(true);
+      }
+    }
+
+    // --- Data Rendering & Actions ---
+    async function load(reset = true) {
+      if (reset) S.cursor = null;
+
+      const p = new URLSearchParams({
+        view: S.view,
+        q: $('#q').value,
+        status: $('#status').value,
+        priority: $('#priority').value,
+      });
+
+      if (S.cursor) p.set('cursor', S.cursor);
+
+      const d = await api('/items?' + p);
+      const itemsHtml = d.items
+        .map(
+          (i) => `
+          <div class="item ${i.id === S.sel ? 'sel' : ''}" data-id="${i.id}">
+            <b>#${i.id} ${esc(i.title)}</b>
+            <div class="mut">
+              <span class="tag ${i.priority}">${i.priority}</span>
+              <span class="tag">${i.status}</span>
+              ${i.assignee_id ? 'assignee ' + esc(S.users[i.assignee_id] || i.assignee_id) : 'unassigned'}
+            </div>
+          </div>`
+        )
+        .join('');
+
+      $('#list').innerHTML = reset ? itemsHtml : $('#list').innerHTML + itemsHtml;
+
+      if (reset && !d.items.length) {
+        $('#list').innerHTML = '<div class="mut">Nothing here.</div>';
+      }
+
+      S.cursor = d.nextCursor;
+      $('#more').style.display = S.cursor ? 'block' : 'none';
+    }
+
+    async function open(id) {
+      S.sel = id;
+      const { item: i, role, activity } = await api('/items/' + id);
+
+      const canW = role !== 'VIEWER';
+      const lead = role === 'LEAD';
+
+      const nexts = {
+        OPEN: ['IN_PROGRESS'],
+        IN_PROGRESS: ['AWAITING_APPROVAL', 'OPEN'],
+        AWAITING_APPROVAL: lead ? ['RESOLVED', 'IN_PROGRESS'] : [],
+        RESOLVED: lead ? ['CLOSED', 'IN_PROGRESS'] : ['IN_PROGRESS'],
+        CLOSED: [],
+      }[i.status] || [];
+
+      $('#detail').innerHTML = `
+        <h3 style="margin: 0 0 4px;">#${i.id} ${esc(i.title)}</h3>
+        <div class="mut">${esc(i.type)} · team ${i.team_id} · your role ${role} · v${i.version}</div>
+        <p>${esc(i.description) || '<span class="mut">No description</span>'}</p>
+        
+        <div class="row">
+          <span class="tag ${i.priority}">${i.priority}</span>
+          <span class="tag">${i.status}</span>
+          <span class="tag">${i.assignee_id ? 'assignee: ' + esc(S.users[i.assignee_id]) : 'unassigned'}</span>
+        </div>
+        
+        <div class="row">
+          ${canW && !i.assignee_id ? '<button class="p" id="claim">Claim</button>' : ''}
+          ${canW ? nexts.map((t) => `<button data-to="${t}">→ ${t}</button>`).join('') : ''}
+          ${lead ? '<select id="asg"><option value="">Assign to…</option><option value="none">Unassign</option></select>' : ''}
+          ${lead ? `<select id="prio">${['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((p) => `<option ${p === i.priority ? 'selected' : ''}>${p}</option>`).join('')}</select>` : ''}
+        </div>
+        
+        ${canW ? '<div class="row"><input id="cm" placeholder="Add comment" style="flex: 1;"><button id="cmb">Post</button></div>' : ''}
+        
+        <h4>History</h4>
+        ${activity
+          .map(
+            (a) => `
+            <div class="ev">
+              <b>${esc(a.type)}</b> by${esc(a.actor)} 
+              <span class="mut">${new Date(a.created_at).toLocaleString()}</span>
+              <div class="mut">${esc(a.type === 'COMMENT' ? JSON.parse(a.detail).text : a.detail)}</div>
+            </div>`
+          )
+          .join('')}
+      `;
+
+      // Event handlers for detail view actions
+      const as = $('#asg');
+      if (as) {
+        const members = await api(`/teams/${i.team_id}/members`);
+        members.forEach((m) => as.add(new Option(m.name, m.id)));
+        as.onchange = () => {
+          if (!as.value) return;
+          act(async () => {
+            await api(`/items/${id}/assign`, 'POST', {
+              assignee_id: as.value === 'none' ? null : Number(as.value),
+              version: i.version,
+            });
+            await open(id);
+            load(true);
+          });
+        };
+      }
+
+      const c = $('#claim');
+      if (c) {
+        c.onclick = () =>
+          act(async () => {
+            c.disabled = true;
+            document.querySelectorAll('#detail .tag')[2].textContent =
+              'assignee: ' + S.me.name.split(' ')[0] + ' (saving…)';
+            await api(`/items/${id}/claim`, 'POST');
+            await open(id);
+            load(true);
+          });
+      }
+
+      document.querySelectorAll('[data-to]').forEach((b) => {
+        b.onclick = () =>
+          act(async () => {
+            await api(`/items/${id}/transition`, 'POST', {
+              to: b.dataset.to,
+              version: i.version,
+            });
+            await open(id);
+            load(true);
+          });
+      });
+
+      const pr = $('#prio');
+      if (pr) {
+        pr.onchange = () =>
+          act(async () => {
+            await api(`/items/${id}`, 'PATCH', {
+              priority: pr.value,
+              version: i.version,
+            });
+            await open(id);
+            load(true);
+          });
+      }
+
+      const cb = $('#cmb');
+      if (cb) {
+        cb.onclick = () =>
+          act(async () => {
+            await api(`/items/${id}/comments`, 'POST', { text: $('#cm').value });
+            open(id);
+          });
+      }
+    }
+
+    // --- Authentication & Session Flow ---
+    function showLogin() {
+      $('#login').style.display = 'block';
+      $('#app').style.display = 'none';
+      $('#out').style.display = 'none';
+      $('#who').textContent = '';
+    }
+
+    function logout() {
+      S.tok = localStorage.tok = '';
+      S.sel = null;
+      S.me = null;
+      $('#notif').textContent = '';
+      showLogin();
+    }
+
+    async function boot() {
+      try {
+        S.me = await api('/me');
+        $('#login').style.display = 'none';
+        $('#app').style.display = 'grid';
+        $('#out').style.display = '';
+        $('#who').textContent = S.me.name;
+        $('#nteam').innerHTML = S.me.memberships
+          .map((m) => `<option value="${m.team_id}">${esc(m.name)} (${m.role})</option>`)
+          .join('');
+
+        mark();
+        await load();
+
+        const n = await api('/notifications');
+        $('#notif').textContent = n.length ? `🔔 ${n.length} notification(s)` : '';
+      } catch (e) {
+        banner(e.message);
+      }
+    }
+
+    function mark() {
+      document.querySelectorAll('#views button').forEach((b) => {
+        b.classList.toggle('on', b.dataset.v === S.view);
+      });
+    }
+
+    // --- App Lifecycle & Event Wiring ---
+    async function init() {
+      const us = await (await fetch('/api/users')).json();
+      us.forEach((u) => (S.users[u.id] = u.name.split(' ')[0]));
+
+      $('#lemail').innerHTML = us
+        .map((u) => `<option value="${esc(u.email)}">${esc(u.name)}</option>`)
+        .join('');
+
+      $('#lgo').onclick = async () => {
+        try {
+          const r = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              email: $('#lemail').value,
+              password: $('#lpw').value,
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error);
+
+          S.tok = localStorage.tok = d.token;
+          boot();
+        } catch (e) {
+          banner(e.message);
+        }
+      };
+
+      $('#out').onclick = logout;
+
+      $('#views').innerHTML = VIEWS.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('');
+      $('#views').onclick = (e) => {
+        if (e.target.dataset.v === undefined) return;
+        S.view = e.target.dataset.v;
+        mark();
+        load();
+      };
+
+      ['#q', '#status', '#priority'].forEach((s) => {
+        $(s).oninput = () => {
+          clearTimeout(S.t);
+          S.t = setTimeout(load, 250);
+        };
+      });
+
+      $('#more').onclick = () => load(false);
+
+      $('#list').onclick = (e) => {
+        const el = e.target.closest('.item');
+        if (el) open(Number(el.dataset.id));
+      };
+
+      $('#create').onclick = () =>
+        act(async () => {
+          const t = $('#ntitle').value.trim();
+          if (!t) return;
+          const i = await api('/items', 'POST', {
+            title: t,
+            team_id: Number($('#nteam').value),
+          });
+          $('#ntitle').value = '';
+          await load();
+          open(i.id);
+        });
+
+      S.tok ? boot() : showLogin();
+    }
+
+    // Polling background update
+    setInterval(() => {
+      if (S.me) {
+        load(true);
+        if (S.sel && !document.activeElement.matches('input,select,textarea')) {
+          open(S.sel).catch(() => {});
+        }
+      }
+    }, 15000);
+
+    init();
+  </script>
+</body>
+</html>
